@@ -14,6 +14,7 @@ import {
   TableRow,
   TextRun,
   UnderlineType,
+  VerticalAlign,
   WidthType,
 } from "docx";
 
@@ -118,16 +119,21 @@ export const defaultResumeData: ResumeData = {
 
 const FONT_NAME = "Proxima Nova";
 const TITLE_COLOR = "353744";
+const SECTION_TITLE_COLOR = "3C77C1";
 const LINK_COLOR = "1155cc";
 const MUTED_COLOR = "666666";
 const BODY_COLOR = "000000";
+const PAGE_WIDTH = 11906;
+const PAGE_MARGIN = 430;
+const CONTENT_WIDTH = PAGE_WIDTH - PAGE_MARGIN * 2;
 
 const headingRun = (text: string) =>
   new TextRun({
     text,
     font: FONT_NAME,
     size: 26,
-    color: BODY_COLOR,
+    color: SECTION_TITLE_COLOR,
+    bold: true,
   });
 
 const bodyRun = (text: string, overrides: Partial<IRunOptions> = {}) =>
@@ -139,10 +145,17 @@ const bodyRun = (text: string, overrides: Partial<IRunOptions> = {}) =>
     ...overrides,
   });
 
+const headerLabelRun = (text: string) =>
+  new TextRun({
+    text,
+    size: 22,
+    color: MUTED_COLOR,
+  });
+
 const sectionHeading = (text: string) =>
   new Paragraph({
     heading: HeadingLevel.HEADING_1,
-    spacing: { before: 80 },
+    spacing: { before: 160, after: 40, line: 240 },
     children: [headingRun(text)],
   });
 
@@ -160,6 +173,39 @@ const hyperlinkRun = (text: string, link: string) =>
     ],
   });
 
+const markdownRuns = (text: string, base: IRunOptions) => {
+  const runs: TextRun[] = [];
+  const boldPattern = /\*\*(.+?)\*\*/g;
+  let lastIndex = 0;
+  let match = boldPattern.exec(text);
+
+  while (match) {
+    if (match.index > lastIndex) {
+      const plainText = text.slice(lastIndex, match.index);
+      if (plainText.length > 0) {
+        runs.push(new TextRun({ text: plainText, ...base }));
+      }
+    }
+
+    const boldText = match[1] ?? "";
+    if (boldText.length > 0) {
+      runs.push(new TextRun({ text: boldText, ...base, bold: true }));
+    }
+
+    lastIndex = match.index + match[0].length;
+    match = boldPattern.exec(text);
+  }
+
+  if (lastIndex < text.length) {
+    const tailText = text.slice(lastIndex);
+    if (tailText.length > 0) {
+      runs.push(new TextRun({ text: tailText, ...base }));
+    }
+  }
+
+  return runs;
+};
+
 const buildTechnicalSkillsTable = (rows: TechnicalSkill[]) => {
   const cellBorders = {
     top: { style: BorderStyle.NONE, size: 0, color: "FFFFFF" },
@@ -169,7 +215,7 @@ const buildTechnicalSkillsTable = (rows: TechnicalSkill[]) => {
   };
 
   return new Table({
-    width: { size: 11160, type: WidthType.DXA },
+    width: { size: CONTENT_WIDTH, type: WidthType.DXA },
     layout: TableLayoutType.FIXED,
     rows: rows.map(
       (row) =>
@@ -180,16 +226,16 @@ const buildTechnicalSkillsTable = (rows: TechnicalSkill[]) => {
               width: { size: 1770, type: WidthType.DXA },
               borders: cellBorders,
               margins: { top: 0, bottom: 0, left: 0, right: 0 },
+              verticalAlign: VerticalAlign.TOP,
               children: [
                 new Paragraph({
                   spacing: { before: 0 },
-                  children: [
-                    new TextRun({
-                      text: row.label,
-                      font: FONT_NAME,
-                      color: TITLE_COLOR,
-                    }),
-                  ],
+                  alignment: AlignmentType.LEFT,
+                  children: markdownRuns(row.label, {
+                    font: FONT_NAME,
+                    size: 22,
+                    color: TITLE_COLOR,
+                  }),
                 }),
               ],
             }),
@@ -197,10 +243,16 @@ const buildTechnicalSkillsTable = (rows: TechnicalSkill[]) => {
               width: { size: 9390, type: WidthType.DXA },
               borders: cellBorders,
               margins: { top: 0, bottom: 0, left: 0, right: 0 },
+              verticalAlign: VerticalAlign.TOP,
               children: [
                 new Paragraph({
-                  spacing: { before: 0, line: 240 },
-                  children: [bodyRun(row.value)],
+                  spacing: { before: 0 },
+                  alignment: AlignmentType.LEFT,
+                  children: markdownRuns(row.value, {
+                    font: FONT_NAME,
+                    size: 22,
+                    color: BODY_COLOR,
+                  }),
                 }),
               ],
             }),
@@ -247,7 +299,9 @@ export const buildResumeDocument = (data: ResumeData) => {
         text: entry.company,
         font: FONT_NAME,
         color: TITLE_COLOR,
-        italics: true,
+        size: 22,
+        bold: true,
+        italics: false,
       }),
     ];
 
@@ -257,12 +311,14 @@ export const buildResumeDocument = (data: ResumeData) => {
           text: " - ",
           font: FONT_NAME,
           color: MUTED_COLOR,
+          size: 22,
           italics: true,
         }),
         new TextRun({
           text: entry.role,
           font: FONT_NAME,
           color: MUTED_COLOR,
+          size: 22,
           italics: true,
         })
       );
@@ -270,20 +326,21 @@ export const buildResumeDocument = (data: ResumeData) => {
 
     const bullets = entry.bullets.map((bullet) => bulletParagraph(bullet));
     return [
-      ...(index === 0 ? [] : [new Paragraph({ text: "", spacing: { before: 20 } })]),
       new Paragraph({
         heading: HeadingLevel.HEADING_2,
-        spacing: { before: 80 },
+        spacing: { before: 40 },
         children: titleRuns,
       }),
       new Paragraph({
         heading: HeadingLevel.HEADING_4,
-        spacing: { before: 40, line: 240 },
+        spacing: { before: 20, line: 240 },
         children: [
           new TextRun({
             text: entry.dateRange,
             font: FONT_NAME,
             size: 20,
+            color: MUTED_COLOR,
+            italics: false,
           }),
         ],
       }),
@@ -297,29 +354,35 @@ export const buildResumeDocument = (data: ResumeData) => {
       ...(index === 0 ? [] : [new Paragraph({ text: "", spacing: { before: 20 } })]),
       new Paragraph({
         heading: HeadingLevel.HEADING_2,
-        spacing: { before: 80 },
+        spacing: { before: 40 },
         children: [
           new TextRun({
             text: `${entry.school} `,
             font: FONT_NAME,
             color: TITLE_COLOR,
-            italics: true,
+            size: 22,
+            bold: true,
+            italics: false,
           }),
           new TextRun({
             text: `- ${entry.degree}`,
             font: FONT_NAME,
             color: MUTED_COLOR,
+            size: 22,
             italics: true,
           }),
         ],
       }),
       new Paragraph({
-        spacing: { before: 80, line: 240 },
+        heading: HeadingLevel.HEADING_4,
+        spacing: { before: 20, line: 240 },
         children: [
           new TextRun({
             text: entry.dateRange,
             font: FONT_NAME,
             size: 20,
+            color: MUTED_COLOR,
+            italics: false,
           }),
         ],
       }),
@@ -333,8 +396,13 @@ export const buildResumeDocument = (data: ResumeData) => {
       {
         properties: {
           page: {
-            size: { width: 11906, height: 16838 },
-            margin: { top: 430, bottom: 0, left: 430, right: 430 },
+            size: { width: PAGE_WIDTH, height: 16838 },
+            margin: {
+              top: PAGE_MARGIN,
+              bottom: 0,
+              left: PAGE_MARGIN,
+              right: PAGE_MARGIN,
+            },
           },
         },
         children: [
@@ -343,7 +411,6 @@ export const buildResumeDocument = (data: ResumeData) => {
             children: [
               new TextRun({
                 text: data.header.fullName,
-                font: FONT_NAME,
                 size: 40,
                 color: TITLE_COLOR,
               }),
@@ -352,16 +419,18 @@ export const buildResumeDocument = (data: ResumeData) => {
           new Paragraph({
             spacing: { before: 0, line: 240 },
             children: [
-              bodyRun(`${data.header.location} | ${data.header.phone} | `),
+              headerLabelRun(
+                `${data.header.location} | ${data.header.phone} | `
+              ),
               hyperlinkRun(data.header.email, `mailto:${data.header.email}`),
             ],
           }),
           new Paragraph({
             spacing: { before: 0, line: 240 },
             children: [
-              bodyRun("LinkedIn: "),
+              headerLabelRun("LinkedIn: "),
               hyperlinkRun(data.header.linkedinLabel, data.header.linkedinUrl),
-              bodyRun(" | GitHub: "),
+              headerLabelRun(" | GitHub: "),
               hyperlinkRun(data.header.githubLabel, data.header.githubUrl),
             ],
           }),
@@ -376,7 +445,6 @@ export const buildResumeDocument = (data: ResumeData) => {
           }),
           sectionHeading("TECHNICAL SKILLS"),
           buildTechnicalSkillsTable(data.technicalSkills),
-          new Paragraph({ text: "" }),
           sectionHeading("EXPERIENCE"),
           ...experienceBlocks,
           sectionHeading("EDUCATION"),
