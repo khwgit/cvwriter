@@ -3,6 +3,15 @@ import index from "./index.html";
 
 const server = serve({
   routes: {
+    "/resume.json": async () => {
+      const file = Bun.file("resume.json");
+      if (await file.exists()) {
+        return new Response(file, {
+          headers: { "Content-Type": "application/json; charset=utf-8" },
+        });
+      }
+      return new Response("resume.json not found", { status: 404 });
+    },
     // Serve index.html for all unmatched routes.
     "/*": index,
 

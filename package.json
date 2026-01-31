@@ -16,7 +16,8 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "docx": "^9.5.1",
-    "lucide-react": "^0.545.0",
+    "docx-preview": "^0.3.7",
+    "lucide-react": "^0.563.0",
     "react": "^19",
     "react-dom": "^19",
     "tailwind-merge": "^3.3.1"
