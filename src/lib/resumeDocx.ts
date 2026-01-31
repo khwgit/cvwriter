@@ -51,7 +51,6 @@ export type ResumeHeader = {
 export type ResumeData = {
   header: ResumeHeader;
   personalProfile: string;
-  personalProfileHighlight: string;
   technicalSkills: TechnicalSkill[];
   experience: ExperienceEntry[];
   education: EducationEntry[];
@@ -70,7 +69,6 @@ export const defaultResumeData: ResumeData = {
   },
   personalProfile:
     "Briefly describe your experience and the kind of impact you want to make. Keep it concise and tailored to the role.",
-  personalProfileHighlight: "Open to opportunities.",
   technicalSkills: [
     { label: "Core Languages:", value: "TypeScript, JavaScript, Python" },
     { label: "OS/Tools:", value: "Linux, macOS, Git, Docker" },
@@ -123,9 +121,10 @@ const SECTION_TITLE_COLOR = "3C77C1";
 const LINK_COLOR = "1155cc";
 const MUTED_COLOR = "666666";
 const BODY_COLOR = "000000";
-const PAGE_WIDTH = 11906;
+const A4_WIDTH = 11906;
+const A4_HEIGHT = 16838;
 const PAGE_MARGIN = 430;
-const CONTENT_WIDTH = PAGE_WIDTH - PAGE_MARGIN * 2;
+const CONTENT_WIDTH = A4_WIDTH - PAGE_MARGIN * 2;
 
 const headingRun = (text: string) =>
   new TextRun({
@@ -220,10 +219,9 @@ const buildTechnicalSkillsTable = (rows: TechnicalSkill[]) => {
     rows: rows.map(
       (row) =>
         new TableRow({
-          height: { value: 331, rule: HeightRule.ATLEAST },
           children: [
             new TableCell({
-              width: { size: 1770, type: WidthType.DXA },
+              width: { size: `44mm`, type: WidthType.DXA },
               borders: cellBorders,
               margins: { top: 0, bottom: 0, left: 0, right: 0 },
               verticalAlign: VerticalAlign.TOP,
@@ -240,7 +238,7 @@ const buildTechnicalSkillsTable = (rows: TechnicalSkill[]) => {
               ],
             }),
             new TableCell({
-              width: { size: 9390, type: WidthType.DXA },
+              width: { size: `150mm`, type: WidthType.DXA },
               borders: cellBorders,
               margins: { top: 0, bottom: 0, left: 0, right: 0 },
               verticalAlign: VerticalAlign.TOP,
@@ -396,7 +394,7 @@ export const buildResumeDocument = (data: ResumeData) => {
       {
         properties: {
           page: {
-            size: { width: PAGE_WIDTH, height: 16838 },
+            size: { width: A4_WIDTH, height: A4_HEIGHT },
             margin: {
               top: PAGE_MARGIN,
               bottom: 0,
@@ -438,10 +436,11 @@ export const buildResumeDocument = (data: ResumeData) => {
           new Paragraph({
             alignment: AlignmentType.JUSTIFIED,
             spacing: { before: 40, line: 240 },
-            children: [
-              bodyRun(`${data.personalProfile} `),
-              bodyRun(data.personalProfileHighlight, { bold: true }),
-            ],
+            children: markdownRuns(data.personalProfile, {
+              font: FONT_NAME,
+              size: 22,
+              color: BODY_COLOR,
+            }),
           }),
           sectionHeading("TECHNICAL SKILLS"),
           buildTechnicalSkillsTable(data.technicalSkills),

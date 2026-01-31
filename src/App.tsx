@@ -95,15 +95,9 @@ type FirecrawlScrapeResponse = {
   message?: string;
 };
 
-const markdownProfileFromData = (data: ResumeData) => {
-  const highlight = data.personalProfileHighlight.trim();
-  if (!highlight) return data.personalProfile;
-  return `${data.personalProfile} **${highlight}**`;
-};
-
 const buildJsonFromData = (data: ResumeData): ResumeJsonPayload => ({
   header: data.header,
-  profile: markdownProfileFromData(data),
+  profile: data.personalProfile,
   skills: data.technicalSkills.map((skill) => [skill.label, skill.value]),
   experience: data.experience.map((entry) => ({
     company: entry.company,
@@ -118,16 +112,6 @@ const buildJsonFromData = (data: ResumeData): ResumeJsonPayload => ({
     description: entry.bullets.map((bullet) => `- ${bullet}`).join("\n"),
   })),
 });
-
-const parseProfileMarkdown = (value: string) => {
-  const match = value.match(/\*\*(.+?)\*\*/);
-  if (!match) {
-    return { text: value.trim(), highlight: "" };
-  }
-  const highlight = (match[1] ?? "").trim();
-  const text = value.replace(match[0], "").replace(/\s+/g, " ").trim();
-  return { text, highlight };
-};
 
 const parseDescription = (value: string) =>
   value
@@ -203,9 +187,8 @@ export function App() {
       setResumeData((prev) => {
         const profileValue =
           typeof payload.profile === "string" && payload.profile.trim().length > 0
-            ? payload.profile
-            : markdownProfileFromData(prev);
-        const profile = parseProfileMarkdown(profileValue);
+            ? payload.profile.trim()
+            : prev.personalProfile;
         const skills = normalizeSkills(Array.isArray(payload.skills) ? payload.skills : [], prev.technicalSkills);
         const experience = normalizeExperience(Array.isArray(payload.experience) ? payload.experience : [], prev.experience);
         const education = normalizeEducation(payload.education, prev.education);
@@ -213,8 +196,7 @@ export function App() {
 
         return {
           header,
-          personalProfile: profile.text || prev.personalProfile,
-          personalProfileHighlight: profile.highlight,
+          personalProfile: profileValue,
           technicalSkills: skills,
           experience,
           education,
