@@ -32,4 +32,20 @@ Production:
 docker compose --profile prod up --build app-prod
 ```
 
+## Firecrawl (self-hosted)
+
+Start the app + Firecrawl stack:
+
+```bash
+docker compose up --build
+```
+
+Test the crawl endpoint:
+
+```bash
+curl -X POST http://localhost:3002/v1/crawl \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"https://firecrawl.dev"}'
+```
+
 This project was created using `bun init` in bun v1.3.6. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.

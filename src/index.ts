@@ -1,7 +1,12 @@
 import { serve } from "bun";
 import index from "./index.html";
 
+const appPort = Number(process.env.APP_PORT ?? 3000);
+const appHostname = process.env.APP_HOST ?? "0.0.0.0";
+
 const server = serve({
+  port: appPort,
+  hostname: appHostname,
   routes: {
     "/resume.json": async () => {
       const file = Bun.file("resume.json");
