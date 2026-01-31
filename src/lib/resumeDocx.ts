@@ -272,7 +272,11 @@ const bulletParagraph = (text: string) =>
     alignment: AlignmentType.JUSTIFIED,
     spacing: { before: 40, line: 240 },
     numbering: { reference: "resume-bullets", level: 0 },
-    children: [bodyRun(text)],
+    children: markdownRuns(text, {
+      font: FONT_NAME,
+      size: 22,
+      color: BODY_COLOR,
+    }),
   });
 
 export const buildResumeDocument = (data: ResumeData) => {
