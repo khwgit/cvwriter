@@ -118,6 +118,7 @@ export function App() {
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [companyName, setCompanyName] = useState(DEFAULT_EMPLOYER);
   const [jdUrl, setJdUrl] = useState("");
+  const [scrapedText, setScrapedText] = useState("");
   const previewRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -190,17 +191,6 @@ export function App() {
     };
   }, [previewBlob]);
 
-  const handleEmployerChange = (value: string) => {
-    setCompanyName(value);
-    try {
-      const payload = JSON.parse(jsonInput) as ResumeJsonPayload;
-      const updatedPayload = { ...payload, employer: value };
-      setJsonInput(JSON.stringify(updatedPayload, null, 2));
-    } catch (error) {
-      // Preserve invalid JSON while still letting the employer input update.
-    }
-  };
-
   const handleDownload = async () => {
     const doc = buildResumeDocument(resumeData);
     const blob = await Packer.toBlob(doc);
@@ -211,6 +201,15 @@ export function App() {
     anchor.download = trimmedCompanyName ? `${trimmedCompanyName} - Resume.docx` : "Resume.docx";
     anchor.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleCopyScrapedText = async () => {
+    if (!scrapedText.trim()) return;
+    try {
+      await navigator.clipboard.writeText(scrapedText);
+    } catch (error) {
+      // Ignore clipboard errors; user can still select manually.
+    }
   };
 
   return (
@@ -229,7 +228,7 @@ export function App() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Resume JSON</CardTitle>
+              <CardTitle>Job Scraping</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -247,14 +246,33 @@ export function App() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="company-name">Company name</Label>
-                <Input
-                  id="company-name"
-                  placeholder="Company name for the file name"
-                  value={companyName}
-                  onChange={(event) => handleEmployerChange(event.target.value)}
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="scraped-text">Crawled text</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleCopyScrapedText}
+                    disabled={!scrapedText.trim()}
+                  >
+                    Copy
+                  </Button>
+                </div>
+                <Textarea
+                  id="scraped-text"
+                  rows={8}
+                  placeholder="Crawled text will appear here."
+                  value={scrapedText}
+                  onChange={(event) => setScrapedText(event.target.value)}
+                  className="h-60"
                 />
               </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Resume JSON</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
               <div className="space-y-2">
                 <Label htmlFor="resume-json">Paste JSON (markdown supported in profile + bullets)</Label>
                 <Textarea
@@ -262,7 +280,7 @@ export function App() {
                   rows={24}
                   value={jsonInput}
                   onChange={(event) => setJsonInput(event.target.value)}
-                  className="font-mono"
+                  className="h-96 font-mono"
                 />
               </div>
               {parseError ? <p className="text-sm text-destructive">{parseError}</p> : null}
