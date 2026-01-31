@@ -1,0 +1,29 @@
+---
+description: DOCX table widths compatible with Google Docs
+globs: **/*.ts
+alwaysApply: false
+---
+
+# DOCX tables for Google Docs
+
+When generating DOCX tables that must render correctly in Google Docs:
+
+- Prefer percentage widths for table + cells (`WidthType.PERCENTAGE`).
+- Avoid string widths like `"44mm"` with `WidthType.DXA` (Google Docs collapses).
+- Add `columnWidths` (DXA) derived from the same percentages to create a stable table grid.
+- Use `TableLayoutType.AUTOFIT` with a 100% table width.
+
+```typescript
+const labelPct = 23;
+const valuePct = 77;
+const contentWidth = pageWidth - margin * 2;
+const labelDxa = Math.round(contentWidth * (labelPct / 100));
+const valueDxa = contentWidth - labelDxa;
+
+new Table({
+  width: { size: 100, type: WidthType.PERCENTAGE },
+  columnWidths: [labelDxa, valueDxa],
+  layout: TableLayoutType.AUTOFIT,
+  // cells use WidthType.PERCENTAGE for label/value
+});
+```

@@ -125,6 +125,12 @@ const A4_WIDTH = 11906;
 const A4_HEIGHT = 16838;
 const PAGE_MARGIN = 430;
 const CONTENT_WIDTH = A4_WIDTH - PAGE_MARGIN * 2;
+const SKILLS_LABEL_WIDTH_PERCENT = 23;
+const SKILLS_VALUE_WIDTH_PERCENT = 77;
+const SKILLS_LABEL_WIDTH_DXA = Math.round(
+  CONTENT_WIDTH * (SKILLS_LABEL_WIDTH_PERCENT / 100)
+);
+const SKILLS_VALUE_WIDTH_DXA = CONTENT_WIDTH - SKILLS_LABEL_WIDTH_DXA;
 
 const headingRun = (text: string) =>
   new TextRun({
@@ -214,14 +220,15 @@ const buildTechnicalSkillsTable = (rows: TechnicalSkill[]) => {
   };
 
   return new Table({
-    width: { size: CONTENT_WIDTH, type: WidthType.DXA },
-    layout: TableLayoutType.FIXED,
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    columnWidths: [SKILLS_LABEL_WIDTH_DXA, SKILLS_VALUE_WIDTH_DXA],
+    layout: TableLayoutType.AUTOFIT,
     rows: rows.map(
       (row) =>
         new TableRow({
           children: [
             new TableCell({
-              width: { size: `44mm`, type: WidthType.DXA },
+              width: { size: SKILLS_LABEL_WIDTH_PERCENT, type: WidthType.PERCENTAGE },
               borders: cellBorders,
               margins: { top: 0, bottom: 0, left: 0, right: 0 },
               verticalAlign: VerticalAlign.TOP,
@@ -238,7 +245,7 @@ const buildTechnicalSkillsTable = (rows: TechnicalSkill[]) => {
               ],
             }),
             new TableCell({
-              width: { size: `150mm`, type: WidthType.DXA },
+              width: { size: SKILLS_VALUE_WIDTH_PERCENT, type: WidthType.PERCENTAGE },
               borders: cellBorders,
               margins: { top: 0, bottom: 0, left: 0, right: 0 },
               verticalAlign: VerticalAlign.TOP,
