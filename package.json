@@ -1,6 +1,6 @@
 {
   "name": "bun-react-template",
-  "description": "AI-assisted resume editor that generates and previews DOCX resumes, built to practice React and explore differences with Flutter.",
+  "description": "AI-assisted resume editor that generates and previews DOCX resumes with job-description scraping support.",
   "version": "0.1.0",
   "private": true,
   "type": "module",
