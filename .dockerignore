@@ -1,0 +1,11 @@
+.git
+.gitignore
+.cursor
+.DS_Store
+node_modules
+bun.lockb
+dist
+build
+coverage
+*.log
+*.tmp

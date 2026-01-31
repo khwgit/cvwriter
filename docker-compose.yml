@@ -1,0 +1,29 @@
+services:
+  app:
+    build:
+      context: .
+      target: dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - bun_cache:/root/.bun
+    environment:
+      - NODE_ENV=development
+    command: ["bun", "dev"]
+
+  app-prod:
+    profiles:
+      - prod
+    build:
+      context: .
+      target: prod
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    command: ["bun", "start"]
+
+volumes:
+  bun_cache:

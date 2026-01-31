@@ -18,4 +18,18 @@ To run for production:
 bun start
 ```
 
+## Docker
+
+Development:
+
+```bash
+docker compose up --build
+```
+
+Production:
+
+```bash
+docker compose --profile prod up --build app-prod
+```
+
 This project was created using `bun init` in bun v1.3.6. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
