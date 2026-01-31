@@ -1,51 +1,36 @@
-# bun-react-tailwind-shadcn-template
+# cvwriter
 
-To install dependencies:
+AI-assisted resume customization is popular, and I built this tool to explore that workflow while practicing React and understanding the differences between Flutter and React app development. It is a learning-focused project that also demonstrates front-end UI composition, client-side document generation, and integration with external services.
+
+## Architecture
+
+- `src/index.ts`: Bun server that serves the React app, hot reload in dev, and an optional `resume.json` payload.
+- `src/App.tsx`: Main React UI for editing resume data, previewing, and exporting `.docx`.
+- `src/lib/resumeDocx.ts`: Document builder using `docx` for layout and content.
+- `src/components/ui/*`: shadcn/Radix UI components and inputs.
+- `docx-preview`: Renders the generated `.docx` in the browser for quick preview.
+- `docker-compose.yml`: Optional Firecrawl stack used to scrape job descriptions for tailoring prompts.
+
+## Setup
+
+### Prerequisites
+
+- [Bun](https://bun.com) v1.x
+- Docker (optional, only for Firecrawl)
+
+### Docker
+
+Development (app + Firecrawl stack):
 
 ```bash
-bun install
-```
-
-To start a development server:
-
-```bash
-bun dev
-```
-
-To run for production:
-
-```bash
-bun start
-```
-
-## Docker
-
-Development:
-
-```bash
+cp .env.firecrawl.example .env.firecrawl
 docker compose up --build
 ```
 
-Production:
+Open `http://localhost:3000`.
 
-```bash
-docker compose --profile prod up --build app-prod
-```
+## TODO
 
-## Firecrawl (self-hosted)
-
-Start the app + Firecrawl stack:
-
-```bash
-docker compose up --build
-```
-
-Test the crawl endpoint:
-
-```bash
-curl -X POST http://localhost:3002/v1/crawl \
-  -H 'Content-Type: application/json' \
-  -d '{"url":"https://firecrawl.dev"}'
-```
-
-This project was created using `bun init` in bun v1.3.6. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+- Better integration with Google Drive (auto upload on generation)
+- Track application status in the UI
+- Add an MCP server for more flexible workflows
