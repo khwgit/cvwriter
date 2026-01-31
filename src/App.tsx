@@ -37,16 +37,67 @@ type ResumeJsonPayload = {
 };
 
 const DEFAULT_EMPLOYER = "Quantum Detectors";
+const DEFAULT_FIRECRAWL_PORT = "3002";
 
-const markdownProfileFromData = (data: ResumeData) => {
-  const highlight = data.personalProfileHighlight.trim();
-  if (!highlight) return data.personalProfile;
-  return `${data.personalProfile} **${highlight}**`;
+const resolveFirecrawlBaseUrl = () => {
+  if (typeof window === "undefined") return `http://localhost:${DEFAULT_FIRECRAWL_PORT}`;
+  try {
+    const { protocol, hostname } = window.location;
+    return `${protocol}//${hostname}:${DEFAULT_FIRECRAWL_PORT}`;
+  } catch (error) {
+    return `http://localhost:${DEFAULT_FIRECRAWL_PORT}`;
+  }
+};
+
+type FirecrawlCrawlStartResponse = {
+  success?: boolean;
+  id?: string;
+  jobId?: string;
+  url?: string;
+};
+
+type FirecrawlCrawlStatus = {
+  status?: string;
+  total?: number;
+  completed?: number;
+  current?: number;
+  data?: Array<{
+    markdown?: string;
+    content?: string;
+    metadata?: {
+      title?: string;
+      sourceURL?: string;
+    };
+  }>;
+  partial_data?: FirecrawlCrawlStatus["data"];
+  next?: string | null;
+  error?: string;
+  message?: string;
+};
+
+type FirecrawlScrapeResponse = {
+  success?: boolean;
+  data?: {
+    markdown?: string;
+    content?: string;
+    metadata?: {
+      title?: string;
+      sourceURL?: string;
+    };
+  };
+  markdown?: string;
+  content?: string;
+  metadata?: {
+    title?: string;
+    sourceURL?: string;
+  };
+  error?: string;
+  message?: string;
 };
 
 const buildJsonFromData = (data: ResumeData): ResumeJsonPayload => ({
   header: data.header,
-  profile: markdownProfileFromData(data),
+  profile: data.personalProfile,
   skills: data.technicalSkills.map((skill) => [skill.label, skill.value]),
   experience: data.experience.map((entry) => ({
     company: entry.company,
@@ -61,16 +112,6 @@ const buildJsonFromData = (data: ResumeData): ResumeJsonPayload => ({
     description: entry.bullets.map((bullet) => `- ${bullet}`).join("\n"),
   })),
 });
-
-const parseProfileMarkdown = (value: string) => {
-  const match = value.match(/\*\*(.+?)\*\*/);
-  if (!match) {
-    return { text: value.trim(), highlight: "" };
-  }
-  const highlight = (match[1] ?? "").trim();
-  const text = value.replace(match[0], "").replace(/\s+/g, " ").trim();
-  return { text, highlight };
-};
 
 const parseDescription = (value: string) =>
   value
@@ -119,6 +160,9 @@ export function App() {
   const [companyName, setCompanyName] = useState(DEFAULT_EMPLOYER);
   const [jdUrl, setJdUrl] = useState("");
   const [scrapedText, setScrapedText] = useState("");
+  const [crawlStatus, setCrawlStatus] = useState("");
+  const [crawlError, setCrawlError] = useState<string | null>(null);
+  const [isCrawling, setIsCrawling] = useState(false);
   const previewRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -143,9 +187,8 @@ export function App() {
       setResumeData((prev) => {
         const profileValue =
           typeof payload.profile === "string" && payload.profile.trim().length > 0
-            ? payload.profile
-            : markdownProfileFromData(prev);
-        const profile = parseProfileMarkdown(profileValue);
+            ? payload.profile.trim()
+            : prev.personalProfile;
         const skills = normalizeSkills(Array.isArray(payload.skills) ? payload.skills : [], prev.technicalSkills);
         const experience = normalizeExperience(Array.isArray(payload.experience) ? payload.experience : [], prev.experience);
         const education = normalizeEducation(payload.education, prev.education);
@@ -153,8 +196,7 @@ export function App() {
 
         return {
           header,
-          personalProfile: profile.text || prev.personalProfile,
-          personalProfileHighlight: profile.highlight,
+          personalProfile: profileValue,
           technicalSkills: skills,
           experience,
           education,
@@ -212,6 +254,190 @@ export function App() {
     }
   };
 
+  const buildCrawlRequestBody = (url: string) => ({
+    url,
+    limit: 1,
+    sitemap: "skip",
+    maxDiscoveryDepth: 0,
+    scrapeOptions: {
+      formats: ["markdown"],
+      onlyMainContent: true,
+    },
+  });
+
+  const buildScrapeRequestBody = (url: string) => ({
+    url,
+    formats: ["markdown"],
+    onlyMainContent: true,
+  });
+
+  const collectCrawlText = (payload: FirecrawlCrawlStatus) => {
+    const pages = Array.isArray(payload.data) && payload.data.length > 0 ? payload.data : payload.partial_data ?? [];
+    return pages
+      .map((page) => {
+        const markdown = typeof page.markdown === "string" ? page.markdown.trim() : "";
+        const content = typeof page.content === "string" ? page.content.trim() : "";
+        const title = page.metadata?.title?.trim();
+        const source = page.metadata?.sourceURL?.trim();
+        const header = [title ? `# ${title}` : "", source ? `Source: ${source}` : ""].filter(Boolean).join("\n");
+        const body = markdown || content;
+        return [header, body].filter(Boolean).join("\n\n").trim();
+      })
+      .filter((text) => text.length > 0)
+      .join("\n\n---\n\n");
+  };
+
+  const extractScrapeText = (payload: FirecrawlScrapeResponse) => {
+    const markdown = payload.data?.markdown ?? payload.markdown;
+    const content = payload.data?.content ?? payload.content;
+    const title = payload.data?.metadata?.title ?? payload.metadata?.title;
+    const source = payload.data?.metadata?.sourceURL ?? payload.metadata?.sourceURL;
+    const header = [title ? `# ${title}` : "", source ? `Source: ${source}` : ""].filter(Boolean).join("\n");
+    const body = (markdown ?? content ?? "").trim();
+    return [header, body].filter(Boolean).join("\n\n").trim();
+  };
+
+  const startCrawlJob = async (url: string, baseUrl: string) => {
+    const requestBody = buildCrawlRequestBody(url);
+    const tryVersions: Array<"v2" | "v1"> = ["v2", "v1"];
+
+    for (const version of tryVersions) {
+      const response = await fetch(`${baseUrl}/${version}/crawl`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          continue;
+        }
+        const message = await response.text();
+        throw new Error(message || `Firecrawl crawl request failed (${response.status}).`);
+      }
+
+      const payload = (await response.json()) as FirecrawlCrawlStartResponse;
+      const id = payload.id ?? payload.jobId;
+      if (!id) {
+        throw new Error("Firecrawl did not return a crawl job id.");
+      }
+      return { id, version };
+    }
+
+    throw new Error("Firecrawl crawl endpoint not found. Is the container running on port 3002?");
+  };
+
+  const scrapeSingleUrl = async (url: string, baseUrl: string) => {
+    const requestBody = buildScrapeRequestBody(url);
+    const tryVersions: Array<"v2" | "v1"> = ["v2", "v1"];
+
+    for (const version of tryVersions) {
+      const response = await fetch(`${baseUrl}/${version}/scrape`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          continue;
+        }
+        const message = await response.text();
+        throw new Error(message || `Firecrawl scrape request failed (${response.status}).`);
+      }
+
+      const payload = (await response.json()) as FirecrawlScrapeResponse;
+      const text = extractScrapeText(payload);
+      if (!text) {
+        throw new Error(payload.error || payload.message || "Scrape finished, but no content was returned.");
+      }
+      return text;
+    }
+
+    throw new Error("Firecrawl scrape endpoint not found. Is the container running on port 3002?");
+  };
+
+  const pollCrawlStatus = async (id: string, version: "v2" | "v1", baseUrl: string) => {
+    const startTime = Date.now();
+    const timeoutMs = 60_000;
+    let lastText = "";
+
+    while (Date.now() - startTime < timeoutMs) {
+      const statusUrl =
+        version === "v2" ? `${baseUrl}/v2/crawl/${id}` : `${baseUrl}/v1/crawl/status/${id}`;
+      const response = await fetch(statusUrl);
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Firecrawl crawl status failed (${response.status}).`);
+      }
+
+      const payload = (await response.json()) as FirecrawlCrawlStatus;
+      const status = payload.status ?? "scraping";
+      const total = payload.total ?? payload.current ?? 0;
+      const completed = payload.completed ?? payload.current ?? 0;
+      setCrawlStatus(
+        status === "completed"
+          ? "Crawl complete."
+          : `Crawling... ${completed}${total ? ` / ${total}` : ""}`
+      );
+
+      const text = collectCrawlText(payload);
+      if (text) {
+        lastText = text;
+      }
+
+      if (status === "completed") {
+        return lastText;
+      }
+      if (status === "failed") {
+        throw new Error(payload.error || payload.message || "Firecrawl crawl failed.");
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+
+    if (lastText) return lastText;
+    throw new Error("Crawl timed out. Try again or reduce the crawl limit.");
+  };
+
+  const handleCrawl = async () => {
+    const trimmedUrl = jdUrl.trim();
+    if (!trimmedUrl) return;
+    try {
+      new URL(trimmedUrl);
+    } catch (error) {
+      setCrawlError("Please enter a valid URL.");
+      return;
+    }
+
+    setIsCrawling(true);
+    setCrawlError(null);
+    setCrawlStatus("Starting crawl...");
+    setScrapedText("");
+
+    try {
+      const baseUrl = resolveFirecrawlBaseUrl();
+      const { id, version } = await startCrawlJob(trimmedUrl, baseUrl);
+      const text = await pollCrawlStatus(id, version, baseUrl);
+      if (text) {
+        setScrapedText(text);
+        return;
+      }
+
+      setCrawlStatus("Crawl empty. Trying direct scrape...");
+      const scraped = await scrapeSingleUrl(trimmedUrl, baseUrl);
+      setScrapedText(scraped);
+    } catch (error) {
+      setCrawlError(error instanceof Error ? error.message : "Crawl failed.");
+    } finally {
+      setIsCrawling(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-muted/40">
       <header className="border-b bg-background">
@@ -240,11 +466,13 @@ export function App() {
                     value={jdUrl}
                     onChange={(event) => setJdUrl(event.target.value)}
                   />
-                  <Button type="button" variant="outline" disabled>
-                    Crawl
+                  <Button type="button" variant="outline" onClick={handleCrawl} disabled={!jdUrl.trim() || isCrawling}>
+                    {isCrawling ? "Crawling..." : "Crawl"}
                   </Button>
                 </div>
               </div>
+              {crawlStatus ? <p className="text-sm text-muted-foreground">{crawlStatus}</p> : null}
+              {crawlError ? <p className="text-sm text-destructive">{crawlError}</p> : null}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="scraped-text">Crawled text</Label>
