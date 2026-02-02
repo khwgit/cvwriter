@@ -3,6 +3,7 @@ import index from "./index.html";
 
 const appPort = Number(process.env.APP_PORT ?? 3000);
 const appHostname = process.env.APP_HOST ?? "0.0.0.0";
+const firecrawlBaseUrl = (process.env.FIRECRAWL_BASE_URL ?? "http://localhost:3002").replace(/\/+$/, "");
 
 const server = serve({
   port: appPort,
@@ -16,6 +17,18 @@ const server = serve({
         });
       }
       return new Response("resume.json not found", { status: 404 });
+    },
+    "/api/firecrawl/*": async (req) => {
+      const url = new URL(req.url);
+      const upstreamPath = url.pathname.replace(/^\/api\/firecrawl/, "");
+      const targetUrl = new URL(`${upstreamPath}${url.search}`, firecrawlBaseUrl);
+      const upstreamRequest = new Request(targetUrl, req);
+      const response = await fetch(upstreamRequest);
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      });
     },
     // Serve index.html for all unmatched routes.
     "/*": index,

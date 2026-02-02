@@ -39,15 +39,7 @@ type ResumeJsonPayload = {
 const DEFAULT_EMPLOYER = "Quantum Detectors";
 const DEFAULT_FIRECRAWL_PORT = "3002";
 
-const resolveFirecrawlBaseUrl = () => {
-  if (typeof window === "undefined") return `http://localhost:${DEFAULT_FIRECRAWL_PORT}`;
-  try {
-    const { protocol, hostname } = window.location;
-    return `${protocol}//${hostname}:${DEFAULT_FIRECRAWL_PORT}`;
-  } catch (error) {
-    return `http://localhost:${DEFAULT_FIRECRAWL_PORT}`;
-  }
-};
+const resolveFirecrawlBaseUrl = () => "/api/firecrawl";
 
 type FirecrawlCrawlStartResponse = {
   success?: boolean;
@@ -297,25 +289,65 @@ export function App() {
     return [header, body].filter(Boolean).join("\n\n").trim();
   };
 
+const describeResponseFailure = async (response: Response, fallback: string) => {
+  const text = await response.text();
+  if (!text) return fallback;
+  try {
+    const payload = JSON.parse(text) as { error?: string; message?: string };
+    return payload.error || payload.message || text;
+  } catch (error) {
+    return text;
+  }
+};
+
+const formatNetworkError = (error: unknown, url: string) => {
+  const fallback = `Network error calling ${url}. Check that Firecrawl is reachable and CORS is allowed.`;
+  if (error instanceof Error) {
+    const message = error.message.trim();
+    return message ? `${fallback}\n\nDetails: ${message}` : fallback;
+  }
+  return fallback;
+};
+
+const formatCrawlFailure = (payload: FirecrawlCrawlStatus) => {
+  const summary = payload.error || payload.message || "Firecrawl crawl failed.";
+  const details = {
+    status: payload.status,
+    error: payload.error,
+    message: payload.message,
+    total: payload.total,
+    completed: payload.completed,
+    next: payload.next,
+  };
+  return `${summary}\n\nDetails:\n${JSON.stringify(details, null, 2)}`;
+};
+
   const startCrawlJob = async (url: string, baseUrl: string) => {
     const requestBody = buildCrawlRequestBody(url);
     const tryVersions: Array<"v2" | "v1"> = ["v2", "v1"];
 
     for (const version of tryVersions) {
-      const response = await fetch(`${baseUrl}/${version}/crawl`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      });
+      const url = `${baseUrl}/${version}/crawl`;
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        });
+      } catch (error) {
+        throw new Error(formatNetworkError(error, url));
+      }
 
       if (!response.ok) {
         if (response.status === 404) {
           continue;
         }
-        const message = await response.text();
-        throw new Error(message || `Firecrawl crawl request failed (${response.status}).`);
+        const fallback = `Firecrawl crawl request failed (${response.status}).`;
+        const message = await describeResponseFailure(response, fallback);
+        throw new Error(message);
       }
 
       const payload = (await response.json()) as FirecrawlCrawlStartResponse;
@@ -334,20 +366,27 @@ export function App() {
     const tryVersions: Array<"v2" | "v1"> = ["v2", "v1"];
 
     for (const version of tryVersions) {
-      const response = await fetch(`${baseUrl}/${version}/scrape`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      });
+      const url = `${baseUrl}/${version}/scrape`;
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+        });
+      } catch (error) {
+        throw new Error(formatNetworkError(error, url));
+      }
 
       if (!response.ok) {
         if (response.status === 404) {
           continue;
         }
-        const message = await response.text();
-        throw new Error(message || `Firecrawl scrape request failed (${response.status}).`);
+        const fallback = `Firecrawl scrape request failed (${response.status}).`;
+        const message = await describeResponseFailure(response, fallback);
+        throw new Error(message);
       }
 
       const payload = (await response.json()) as FirecrawlScrapeResponse;
@@ -369,10 +408,16 @@ export function App() {
     while (Date.now() - startTime < timeoutMs) {
       const statusUrl =
         version === "v2" ? `${baseUrl}/v2/crawl/${id}` : `${baseUrl}/v1/crawl/status/${id}`;
-      const response = await fetch(statusUrl);
+      let response: Response;
+      try {
+        response = await fetch(statusUrl);
+      } catch (error) {
+        throw new Error(formatNetworkError(error, statusUrl));
+      }
       if (!response.ok) {
-        const message = await response.text();
-        throw new Error(message || `Firecrawl crawl status failed (${response.status}).`);
+      const fallback = `Firecrawl crawl status failed (${response.status}).`;
+      const message = await describeResponseFailure(response, fallback);
+      throw new Error(message);
       }
 
       const payload = (await response.json()) as FirecrawlCrawlStatus;
@@ -394,7 +439,7 @@ export function App() {
         return lastText;
       }
       if (status === "failed") {
-        throw new Error(payload.error || payload.message || "Firecrawl crawl failed.");
+      throw new Error(formatCrawlFailure(payload));
       }
 
       await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -472,7 +517,9 @@ export function App() {
                 </div>
               </div>
               {crawlStatus ? <p className="text-sm text-muted-foreground">{crawlStatus}</p> : null}
-              {crawlError ? <p className="text-sm text-destructive">{crawlError}</p> : null}
+              {crawlError ? (
+                <p className="text-sm text-destructive whitespace-pre-wrap">{crawlError}</p>
+              ) : null}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="scraped-text">Crawled text</Label>
